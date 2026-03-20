@@ -1,0 +1,9 @@
+pandas
+numpy
+requests
+beautifulsoup4
+yfinance
+supabase
+boto3
+openpyxl
+python-dotenv

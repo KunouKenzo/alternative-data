@@ -1,0 +1,88 @@
+name: Deploy Alternative Data Platform
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_AWS_ACCESS_KEY_ID: ${{ secrets.VITE_AWS_ACCESS_KEY_ID }}
+          VITE_AWS_SECRET_ACCESS_KEY: ${{ secrets.VITE_AWS_SECRET_ACCESS_KEY }}
+          VITE_AWS_REGION: ${{ secrets.VITE_AWS_REGION }}
+        run: npm run build
+
+      - name: Verify build
+        run: |
+          if [ ! -f dist/index.html ]; then
+            echo "ERROR: dist/index.html not found – build failed"
+            exit 1
+          fi
+          echo "Build verified: dist/index.html exists"
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        run: |
+          rsync -avz --delete \
+            --exclude node_modules \
+            --exclude .git \
+            -e "ssh -i ~/.ssh/id_rsa" \
+            ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/app/
+
+      - name: Configure and restart services
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'REMOTE'
+          cd ~/app
+
+          # Create .env
+          cat > .env << ENVFILE
+          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_AWS_ACCESS_KEY_ID=${{ secrets.VITE_AWS_ACCESS_KEY_ID }}
+          VITE_AWS_SECRET_ACCESS_KEY=${{ secrets.VITE_AWS_SECRET_ACCESS_KEY }}
+          VITE_AWS_REGION=${{ secrets.VITE_AWS_REGION }}
+          SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          AWS_ACCESS_KEY_ID=${{ secrets.VITE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.VITE_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION=${{ secrets.VITE_AWS_REGION }}
+          ENVFILE
+
+          # Install dependencies
+          npm install
+          pip3 install --user -r requirements.txt
+
+          # Ensure logs directory exists
+          mkdir -p logs
+
+          # Restart server via pm2
+          pm2 restart altdata || pm2 start npm --name "altdata" -- run dev:server
+
+          # Sync cron jobs
+          python3 collectors/sync_cron.py
+          REMOTE
