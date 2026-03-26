@@ -4,6 +4,7 @@ import CatalogPage from './pages/CatalogPage'
 import DatasetPage from './pages/DatasetPage'
 import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
+import ArticlesPage from './pages/ArticlesPage'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/dataset/:id" element={<DatasetPage />} />
         <Route path="/status" element={<StatusPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/articles" element={<ArticlesPage />} />
       </Routes>
     </AuthProvider>
   )

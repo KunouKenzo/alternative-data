@@ -1,69 +1,6 @@
 import { useState, useCallback } from 'react'
-
-interface Article {
-  id: string
-  title: string
-  summary: string
-  category: string
-  date: string
-  imageUrl: string
-  readTime: string
-}
-
-const SAMPLE_ARTICLES: Article[] = [
-  {
-    id: '1',
-    title: '原油市場の構造変化：OPECプラスの減産戦略とシェールオイルの供給動向分析',
-    summary: '2024年以降の原油市場における需給バランスの変化を、衛星データとタンカー追跡データから分析。OPECプラスの政策変更がスポット価格に与える影響を定量的に検証します。',
-    category: 'Commodities',
-    date: '2026-03-24',
-    imageUrl: 'https://images.unsplash.com/photo-1513828583688-c52646db42da?w=800&h=450&fit=crop',
-    readTime: '8 min',
-  },
-  {
-    id: '2',
-    title: 'Redditセンチメントと暗号資産価格の相関：自然言語処理による分析',
-    summary: 'Reddit上の暗号資産関連サブレディットの投稿をNLPで分析し、センチメントスコアとBTC/ETH価格の先行・遅行関係を検証。トレーディングシグナルとしての有効性を評価します。',
-    category: 'Sentiment',
-    date: '2026-03-20',
-    imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&h=450&fit=crop',
-    readTime: '12 min',
-  },
-  {
-    id: '3',
-    title: '日本のマクロ経済指標ダッシュボード：CPI・PMI・雇用統計の統合分析',
-    summary: '日本の主要マクロ経済指標を統合的に可視化し、景気サイクルの現在地を推定。BOJの金融政策決定との相関も分析します。',
-    category: 'Macro',
-    date: '2026-03-15',
-    imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=450&fit=crop',
-    readTime: '10 min',
-  },
-  {
-    id: '4',
-    title: '衛星画像で読み解く世界の農作物生産量予測',
-    summary: 'Sentinel-2衛星のNDVIデータを用いて、主要穀物（小麦・トウモロコシ・大豆）の作柄状況をリアルタイムモニタリング。USDA公式発表との乖離を事前に検出する手法を紹介します。',
-    category: 'Commodities',
-    date: '2026-03-10',
-    imageUrl: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=800&h=450&fit=crop',
-    readTime: '15 min',
-  },
-  {
-    id: '5',
-    title: 'S&P500セクターローテーション分析：マネーフローの可視化',
-    summary: 'ETFのフローデータとオプション市場のポジショニングから、機関投資家のセクター間資金移動を追跡。次のローテーション先を予測するフレームワークを構築します。',
-    category: 'Market',
-    date: '2026-03-05',
-    imageUrl: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&h=450&fit=crop',
-    readTime: '11 min',
-  },
-]
-
-const categoryColor: Record<string, string> = {
-  Commodities: 'bg-amber-50 text-amber-700',
-  Macro: 'bg-blue-50 text-blue-700',
-  Sentiment: 'bg-purple-50 text-purple-700',
-  Market: 'bg-emerald-50 text-emerald-700',
-}
+import { Link } from 'react-router-dom'
+import { ARTICLES, ARTICLE_CATEGORY_COLOR } from '../../data/articles'
 
 function formatArticleDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -74,16 +11,16 @@ export default function ArticleCarousel() {
   const [current, setCurrent] = useState(0)
 
   const prev = useCallback(() => {
-    setCurrent(i => (i - 1 + SAMPLE_ARTICLES.length) % SAMPLE_ARTICLES.length)
+    setCurrent(i => (i - 1 + ARTICLES.length) % ARTICLES.length)
   }, [])
 
   const next = useCallback(() => {
-    setCurrent(i => (i + 1) % SAMPLE_ARTICLES.length)
+    setCurrent(i => (i + 1) % ARTICLES.length)
   }, [])
 
   const getArticle = (offset: number) => {
-    const idx = (current + offset + SAMPLE_ARTICLES.length) % SAMPLE_ARTICLES.length
-    return SAMPLE_ARTICLES[idx]
+    const idx = (current + offset + ARTICLES.length) % ARTICLES.length
+    return ARTICLES[idx]
   }
 
   const centerArticle = getArticle(0)
@@ -98,9 +35,16 @@ export default function ArticleCarousel() {
           <span className="material-symbols-outlined text-[20px] text-violet-500">article</span>
           <h2 className="text-lg font-bold text-gray-900">Analysis Reports</h2>
           <span className="text-xs text-gray-400 ml-1">分析レポート</span>
+          <Link
+            to="/articles"
+            className="ml-3 flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 px-3 py-1 rounded-full font-medium transition-colors"
+          >
+            すべて見る
+            <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+          </Link>
         </div>
         <div className="flex items-center gap-1">
-          {SAMPLE_ARTICLES.map((_, i) => (
+          {ARTICLES.map((_, i) => (
             <button
               key={i}
               onClick={() => setCurrent(i)}
@@ -145,7 +89,7 @@ export default function ArticleCarousel() {
               <div className="flex-1 p-5 flex flex-col justify-between min-w-0">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${categoryColor[centerArticle.category] || 'bg-gray-100 text-gray-600'}`}>
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${ARTICLE_CATEGORY_COLOR[centerArticle.category] || 'bg-gray-100 text-gray-600'}`}>
                       {centerArticle.category}
                     </span>
                     <span className="text-[11px] text-gray-400">
