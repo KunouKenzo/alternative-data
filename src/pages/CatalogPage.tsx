@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import ChatPanel from '../components/chat/ChatPanel'
+import ArticleCarousel from '../components/articles/ArticleCarousel'
 
 interface Dataset {
   id: string
@@ -114,6 +115,9 @@ export default function CatalogPage() {
               </Link>
             </div>
           </header>
+
+          {/* Article Carousel */}
+          <ArticleCarousel />
 
           {/* Search */}
           <div className="relative mb-6">
