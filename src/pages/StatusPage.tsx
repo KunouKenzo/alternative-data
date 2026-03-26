@@ -43,7 +43,7 @@ function formatRelative(dateStr: string): string {
 
 function ShimmerRow() {
   return (
-    <div className="glass rounded-xl p-5 flex items-center justify-between">
+    <div className="bg-white rounded-xl p-5 flex items-center justify-between border border-gray-100 shadow-card">
       <div className="flex items-center gap-4">
         <div className="shimmer w-3 h-3 rounded-full" />
         <div className="shimmer h-5 w-40 rounded" />
@@ -105,26 +105,26 @@ export default function StatusPage() {
   }
 
   const statusDot: Record<string, string> = {
-    success: 'bg-emerald-400',
-    error: 'bg-red-400',
-    running: 'bg-amber-400 animate-pulse',
+    success: 'bg-emerald-500',
+    error: 'bg-red-500',
+    running: 'bg-amber-500 animate-pulse',
   }
 
   const statusLabel: Record<string, string> = {
-    success: 'text-emerald-400',
-    error: 'text-red-400',
-    running: 'text-amber-400',
+    success: 'text-emerald-600',
+    error: 'text-red-600',
+    running: 'text-amber-600',
   }
 
   return (
-    <div className="min-h-screen ambient-glow">
-      <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <header className="flex items-center justify-between mb-8">
           <div>
             <Link
               to="/"
-              className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 mb-2"
+              className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-2"
             >
               <span className="material-symbols-outlined text-[16px]">arrow_back</span>
               Back to catalog
@@ -133,7 +133,7 @@ export default function StatusPage() {
               Collection Status
             </h1>
           </div>
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-gray-400">
             <span className="material-symbols-outlined text-[16px]">info</span>
             {sources.length} sources configured
           </div>
@@ -141,7 +141,7 @@ export default function StatusPage() {
 
         {/* Error */}
         {error && (
-          <div className="glass rounded-xl p-4 mb-6 border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+          <div className="bg-red-50 rounded-xl p-4 mb-6 border border-red-200 text-red-600 text-sm flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">error</span>
             {error}
           </div>
@@ -156,42 +156,42 @@ export default function StatusPage() {
                   {/* Source row */}
                   <button
                     onClick={() => toggleExpand(source.id)}
-                    className="w-full glass rounded-xl p-5 flex items-center justify-between hover:border-slate-600/60 text-left group"
+                    className="w-full bg-white rounded-xl p-5 flex items-center justify-between border border-gray-100 shadow-card hover:border-gray-300 text-left group"
                   >
                     <div className="flex items-center gap-4">
                       <span
                         className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                           source.last_run_status
                             ? statusDot[source.last_run_status]
-                            : 'bg-slate-600'
+                            : 'bg-gray-300'
                         }`}
                       />
                       <div>
-                        <div className="text-sm font-semibold text-slate-200 group-hover:text-white">
+                        <div className="text-sm font-semibold text-gray-800 group-hover:text-gray-900">
                           {source.name}
                         </div>
                         {!source.enabled && (
-                          <span className="text-xs text-slate-600">disabled</span>
+                          <span className="text-xs text-gray-400">disabled</span>
                         )}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-6 text-xs">
                       {/* Schedule */}
-                      <div className="text-slate-500 hidden sm:flex items-center gap-1">
+                      <div className="text-gray-400 hidden sm:flex items-center gap-1">
                         <span className="material-symbols-outlined text-[14px]">schedule</span>
                         <code className="font-mono">{source.schedule}</code>
                       </div>
 
                       {/* Last run */}
-                      <div className="text-slate-400 hidden md:flex items-center gap-1.5">
+                      <div className="text-gray-400 hidden md:flex items-center gap-1.5">
                         {source.last_run_status && (
                           <span className={`text-xs capitalize ${statusLabel[source.last_run_status]}`}>
                             {source.last_run_status}
                           </span>
                         )}
                         {source.last_run_at && (
-                          <span className="text-slate-500">
+                          <span className="text-gray-400">
                             {formatRelative(source.last_run_at)}
                           </span>
                         )}
@@ -199,7 +199,7 @@ export default function StatusPage() {
 
                       {/* Next run */}
                       {source.next_run_at && (
-                        <div className="text-slate-500 hidden lg:flex items-center gap-1">
+                        <div className="text-gray-400 hidden lg:flex items-center gap-1">
                           <span className="material-symbols-outlined text-[14px]">update</span>
                           {formatDateTime(source.next_run_at)}
                         </div>
@@ -207,7 +207,7 @@ export default function StatusPage() {
 
                       {/* Expand icon */}
                       <span
-                        className={`material-symbols-outlined text-[18px] text-slate-500 transition-transform ${
+                        className={`material-symbols-outlined text-[18px] text-gray-400 transition-transform ${
                           expandedId === source.id ? 'rotate-180' : ''
                         }`}
                       >
@@ -218,9 +218,9 @@ export default function StatusPage() {
 
                   {/* Expanded runs */}
                   {expandedId === source.id && (
-                    <div className="ml-6 mt-1 mb-2 border-l-2 border-slate-800 pl-4 space-y-1">
+                    <div className="ml-6 mt-1 mb-2 border-l-2 border-gray-200 pl-4 space-y-1">
                       {loadingRuns === source.id ? (
-                        <div className="py-4 flex items-center gap-2 text-sm text-slate-500">
+                        <div className="py-4 flex items-center gap-2 text-sm text-gray-400">
                           <span className="material-symbols-outlined text-[16px] animate-spin">
                             progress_activity
                           </span>
@@ -230,7 +230,7 @@ export default function StatusPage() {
                         runsMap[source.id].map(run => (
                           <div
                             key={run.id}
-                            className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-slate-800/30 text-sm"
+                            className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-100 text-sm"
                           >
                             <div className="flex items-center gap-3">
                               <span
@@ -239,11 +239,11 @@ export default function StatusPage() {
                               <span className={`capitalize text-xs font-medium ${statusLabel[run.status]}`}>
                                 {run.status}
                               </span>
-                              <span className="text-xs text-slate-500">
+                              <span className="text-xs text-gray-400">
                                 {formatDateTime(run.started_at)}
                               </span>
                             </div>
-                            <div className="flex items-center gap-4 text-xs text-slate-500">
+                            <div className="flex items-center gap-4 text-xs text-gray-400">
                               {run.rows_collected != null && (
                                 <span>{run.rows_collected.toLocaleString()} rows</span>
                               )}
@@ -259,7 +259,7 @@ export default function StatusPage() {
                               )}
                               {run.error_message && (
                                 <span
-                                  className="text-red-400 truncate max-w-[250px]"
+                                  className="text-red-500 truncate max-w-[250px]"
                                   title={run.error_message}
                                 >
                                   {run.error_message}
@@ -269,7 +269,7 @@ export default function StatusPage() {
                           </div>
                         ))
                       ) : (
-                        <div className="py-3 text-xs text-slate-500">No runs recorded yet</div>
+                        <div className="py-3 text-xs text-gray-400">No runs recorded yet</div>
                       )}
                     </div>
                   )}
@@ -280,10 +280,10 @@ export default function StatusPage() {
         {/* Empty state */}
         {!loading && !error && sources.length === 0 && (
           <div className="text-center py-20">
-            <span className="material-symbols-outlined text-5xl text-slate-600 mb-4 block">
+            <span className="material-symbols-outlined text-5xl text-gray-300 mb-4 block">
               cloud_off
             </span>
-            <p className="text-slate-400">No data sources configured</p>
+            <p className="text-gray-500">No data sources configured</p>
           </div>
         )}
       </div>

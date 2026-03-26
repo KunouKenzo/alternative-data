@@ -67,7 +67,6 @@ export default function DatasetPage() {
     ])
       .then(([ds]) => {
         setDataset(ds)
-        // Fetch runs if source_id is available
         if (ds.source_id) {
           fetch(`/api/runs?source_id=${ds.source_id}`)
             .then(r => r.json())
@@ -103,40 +102,40 @@ export default function DatasetPage() {
   const previewColumns = previewData.length > 0 ? Object.keys(previewData[0]) : []
 
   const statusColor: Record<string, string> = {
-    success: 'text-emerald-400',
-    error: 'text-red-400',
-    running: 'text-amber-400',
+    success: 'text-emerald-600',
+    error: 'text-red-600',
+    running: 'text-amber-600',
   }
 
   const statusDot: Record<string, string> = {
-    success: 'bg-emerald-400',
-    error: 'bg-red-400',
-    running: 'bg-amber-400 animate-pulse',
+    success: 'bg-emerald-500',
+    error: 'bg-red-500',
+    running: 'bg-amber-500 animate-pulse',
   }
 
   const categoryColor: Record<string, string> = {
-    Commodities: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    Macro: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    Sentiment: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-    Market: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    Commodities: 'bg-amber-50 text-amber-700 border-amber-200',
+    Macro: 'bg-blue-50 text-blue-700 border-blue-200',
+    Sentiment: 'bg-purple-50 text-purple-700 border-purple-200',
+    Market: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen ambient-glow">
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <ShimmerBlock className="h-4 w-48 mb-8" />
           <ShimmerBlock className="h-10 w-96 mb-4" />
           <ShimmerBlock className="h-5 w-full max-w-2xl mb-8" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="glass rounded-xl p-4">
+              <div key={i} className="bg-white rounded-xl p-4 border border-gray-100 shadow-card">
                 <ShimmerBlock className="h-4 w-16 mb-2" />
                 <ShimmerBlock className="h-6 w-24" />
               </div>
             ))}
           </div>
-          <div className="glass rounded-xl p-6">
+          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-card">
             <ShimmerBlock className="h-6 w-32 mb-4" />
             {Array.from({ length: 5 }).map((_, i) => (
               <ShimmerBlock key={i} className="h-8 w-full mb-2" />
@@ -149,17 +148,17 @@ export default function DatasetPage() {
 
   if (error || !dataset) {
     return (
-      <div className="min-h-screen ambient-glow flex items-center justify-center">
-        <div className="glass rounded-xl p-8 text-center max-w-md">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl p-8 text-center max-w-md border border-gray-100 shadow-card">
           <span className="material-symbols-outlined text-5xl text-red-400 mb-4 block">
             error
           </span>
-          <h2 className="text-xl font-semibold text-slate-200 mb-2">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
             {error || 'Dataset not found'}
           </h2>
           <Link
             to="/"
-            className="inline-flex items-center gap-1 text-sm text-violet-400 hover:text-violet-300 mt-4"
+            className="inline-flex items-center gap-1 text-sm text-violet-600 hover:text-violet-700 mt-4"
           >
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
             Back to catalog
@@ -170,37 +169,37 @@ export default function DatasetPage() {
   }
 
   return (
-    <div className="min-h-screen ambient-glow">
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-          <Link to="/" className="hover:text-slate-300 flex items-center gap-1">
+        <nav className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+          <Link to="/" className="hover:text-gray-600 flex items-center gap-1">
             <span className="material-symbols-outlined text-[16px]">home</span>
             Home
           </Link>
           <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-          <span className="text-slate-300">{dataset.title}</span>
+          <span className="text-gray-700">{dataset.title}</span>
         </nav>
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-slate-100">{dataset.title}</h1>
+              <h1 className="text-3xl font-bold text-gray-900">{dataset.title}</h1>
               <span
                 className={`text-xs font-medium px-2.5 py-0.5 rounded-full border ${
-                  categoryColor[dataset.category] || 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                  categoryColor[dataset.category] || 'bg-gray-50 text-gray-600 border-gray-200'
                 }`}
               >
                 {dataset.category}
               </span>
             </div>
-            <p className="text-slate-400 leading-relaxed max-w-2xl">{dataset.description}</p>
+            <p className="text-gray-500 leading-relaxed max-w-2xl">{dataset.description}</p>
           </div>
           <button
             onClick={handleDownload}
             disabled={downloading}
-            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg text-sm font-medium shrink-0"
+            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg text-sm font-medium shrink-0"
           >
             <span className="material-symbols-outlined text-[18px]">
               {downloading ? 'hourglass_empty' : 'download'}
@@ -212,21 +211,9 @@ export default function DatasetPage() {
         {/* Metadata cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
           {[
-            {
-              icon: 'category',
-              label: 'Category',
-              value: dataset.category,
-            },
-            {
-              icon: 'schedule',
-              label: 'Frequency',
-              value: dataset.update_frequency,
-            },
-            {
-              icon: 'source',
-              label: 'Source',
-              value: dataset.source || '--',
-            },
+            { icon: 'category', label: 'Category', value: dataset.category },
+            { icon: 'schedule', label: 'Frequency', value: dataset.update_frequency },
+            { icon: 'source', label: 'Source', value: dataset.source || '--' },
             {
               icon: 'date_range',
               label: 'Date Range',
@@ -234,37 +221,33 @@ export default function DatasetPage() {
                 ? `${formatDate(dataset.date_range_start)} - ${formatDate(dataset.date_range_end)}`
                 : '--',
             },
-            {
-              icon: 'database',
-              label: 'Rows',
-              value: dataset.row_count?.toLocaleString() || '--',
-            },
+            { icon: 'database', label: 'Rows', value: dataset.row_count?.toLocaleString() || '--' },
           ].map(item => (
-            <div key={item.label} className="glass rounded-xl p-4">
-              <div className="flex items-center gap-1.5 text-slate-500 text-xs mb-1">
+            <div key={item.label} className="bg-white rounded-xl p-4 border border-gray-100 shadow-card">
+              <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
                 <span className="material-symbols-outlined text-[14px]">{item.icon}</span>
                 {item.label}
               </div>
-              <div className="text-sm font-medium text-slate-200 truncate">{item.value}</div>
+              <div className="text-sm font-medium text-gray-800 truncate">{item.value}</div>
             </div>
           ))}
         </div>
 
         {/* Preview table */}
         {previewData.length > 0 && (
-          <div className="glass rounded-xl p-6 mb-8">
-            <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-violet-400">table_view</span>
+          <div className="bg-white rounded-xl p-6 mb-8 border border-gray-100 shadow-card">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-violet-500">table_view</span>
               Data Preview
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700/50">
+                  <tr className="border-b border-gray-200">
                     {previewColumns.map(col => (
                       <th
                         key={col}
-                        className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap"
+                        className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider px-4 py-3 whitespace-nowrap"
                       >
                         {col}
                       </th>
@@ -275,10 +258,10 @@ export default function DatasetPage() {
                   {previewData.slice(0, 20).map((row, idx) => (
                     <tr
                       key={idx}
-                      className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors"
+                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                     >
                       {previewColumns.map(col => (
-                        <td key={col} className="px-4 py-2.5 text-slate-300 whitespace-nowrap">
+                        <td key={col} className="px-4 py-2.5 text-gray-700 whitespace-nowrap">
                           {row[col] != null ? String(row[col]) : '--'}
                         </td>
                       ))}
@@ -288,7 +271,7 @@ export default function DatasetPage() {
               </table>
             </div>
             {previewData.length > 20 && (
-              <p className="text-xs text-slate-500 mt-3 text-center">
+              <p className="text-xs text-gray-400 mt-3 text-center">
                 Showing 20 of {previewData.length} preview rows
               </p>
             )}
@@ -297,27 +280,27 @@ export default function DatasetPage() {
 
         {/* Collection history */}
         {runs.length > 0 && (
-          <div className="glass rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-cyan-400">history</span>
+          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-card">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-cyan-500">history</span>
               Collection History
             </h2>
             <div className="space-y-2">
               {runs.map(run => (
                 <div
                   key={run.id}
-                  className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-800/30 hover:bg-slate-800/50 transition-colors"
+                  className="flex items-center justify-between py-3 px-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <span className={`w-2 h-2 rounded-full ${statusDot[run.status]}`} />
                     <span className={`text-sm font-medium capitalize ${statusColor[run.status]}`}>
                       {run.status}
                     </span>
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-gray-400">
                       {formatDateTime(run.started_at)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
                     {run.rows_collected != null && (
                       <span>{run.rows_collected.toLocaleString()} rows</span>
                     )}
@@ -329,7 +312,7 @@ export default function DatasetPage() {
                       </span>
                     )}
                     {run.error_message && (
-                      <span className="text-red-400 truncate max-w-[200px]" title={run.error_message}>
+                      <span className="text-red-500 truncate max-w-[200px]" title={run.error_message}>
                         {run.error_message}
                       </span>
                     )}
