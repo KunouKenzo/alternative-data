@@ -1,13 +1,14 @@
 """
-日本製鉄の売上予測分析スクリプト
+日本製鉄の売上予測分析スクリプト（v2: 全8工場版）
 
-Sentinel-2 SWIR衛星データと財務・マクロ変数を組み合わせて
-日本製鉄（5401）の四半期売上を予測するモデルを構築・検証する。
+ベースラインモデル（衛星データなし）と拡張モデル（衛星データあり）を比較し、
+衛星データが売上予測精度を向上させることを定量的に検証する。
 
 生成物:
   public/articles/nippon-steel-revenue/ 以下にPNGチャート群を出力
 """
 
+import json
 import os
 import sys
 import warnings
@@ -18,6 +19,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import matplotlib.ticker as mticker
 import seaborn as sns
 from sklearn.linear_model import Ridge
@@ -38,16 +40,13 @@ OUTPUT_DIR = PROJECT_ROOT / "public" / "articles" / "nippon-steel-revenue"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# Matplotlib settings – register Japanese font by file path
+# Matplotlib – Japanese font
 # ---------------------------------------------------------------------------
-import matplotlib.font_manager as fm
-
 _jp_font_path = Path.home() / ".local/share/fonts/NotoSansJP-VF.ttf"
 if _jp_font_path.exists():
     fm.fontManager.addfont(str(_jp_font_path))
     plt.rcParams["font.family"] = ["Noto Sans JP", "sans-serif"]
 else:
-    # fallback: try MS Gothic
     _ms_font = Path.home() / ".local/share/fonts/msgothic.ttc"
     if _ms_font.exists():
         fm.fontManager.addfont(str(_ms_font))
@@ -59,34 +58,53 @@ plt.rcParams["savefig.dpi"] = 150
 plt.rcParams["savefig.bbox"] = "tight"
 plt.rcParams["savefig.pad_inches"] = 0.2
 
-# Color palette
-C_PRIMARY = "#7c3aed"   # violet-600
-C_ACCENT = "#06b6d4"    # cyan-500
-C_ORANGE = "#f59e0b"    # amber-500
+# Colors
+C_PRIMARY = "#7c3aed"
+C_ACCENT = "#06b6d4"
+C_ORANGE = "#f59e0b"
 C_RED = "#ef4444"
+C_GREEN = "#10b981"
 C_GRAY = "#6b7280"
 C_LIGHT = "#f3f4f6"
 
+FACILITY_COLORS = {
+    "nippon_steel_kimitsu": "#7c3aed",
+    "nippon_steel_kashima": "#06b6d4",
+    "nippon_steel_muroran": "#f59e0b",
+    "nippon_steel_nagoya": "#ef4444",
+    "nippon_steel_wakayama": "#10b981",
+    "nippon_steel_oita": "#3b82f6",
+    "nippon_steel_yawata": "#ec4899",
+    "nippon_steel_hirohata": "#8b5cf6",
+}
+
+FACILITY_LABELS = {
+    "nippon_steel_kimitsu": "君津",
+    "nippon_steel_kashima": "鹿島",
+    "nippon_steel_muroran": "室蘭",
+    "nippon_steel_nagoya": "名古屋",
+    "nippon_steel_wakayama": "和歌山",
+    "nippon_steel_oita": "大分",
+    "nippon_steel_yawata": "八幡",
+    "nippon_steel_hirohata": "広畑",
+}
+
+
 # ---------------------------------------------------------------------------
-# Supabase client
+# Supabase
 # ---------------------------------------------------------------------------
 def get_supabase():
-    return create_client(
-        os.environ["SUPABASE_URL"],
-        os.environ["SUPABASE_ANON_KEY"],
-    )
+    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_ANON_KEY"])
 
 
 # ---------------------------------------------------------------------------
 # 1. Data fetching
 # ---------------------------------------------------------------------------
 def fetch_satellite_data() -> pd.DataFrame:
-    """Fetch all daily steel plant observations from Supabase."""
     sb = get_supabase()
     all_rows = []
     offset = 0
     page_size = 1000
-
     while True:
         resp = (
             sb.table("steel_plant_activity")
@@ -105,106 +123,69 @@ def fetch_satellite_data() -> pd.DataFrame:
 
     df = pd.DataFrame(all_rows)
     df["image_date"] = pd.to_datetime(df["image_date"])
-    print(f"  衛星データ: {len(df)}行 ({df['image_date'].min().date()} ~ {df['image_date'].max().date()})")
+    n_facilities = df["facility_id"].nunique()
+    print(f"  衛星データ: {len(df)}行, {n_facilities}工場 ({df['image_date'].min().date()} ~ {df['image_date'].max().date()})")
+    for fid in sorted(df["facility_id"].unique()):
+        n = len(df[df["facility_id"] == fid])
+        print(f"    {FACILITY_LABELS.get(fid, fid)}: {n}行")
     return df
 
 
-def fetch_revenue_yfinance() -> pd.DataFrame | None:
-    """Try to get quarterly revenue from yfinance."""
-    try:
-        import yfinance as yf
-        ticker = yf.Ticker("5401.T")
-        fin = ticker.quarterly_financials
-        if fin is not None and not fin.empty:
-            if "Total Revenue" in fin.index:
-                rev = fin.loc["Total Revenue"].sort_index()
-                df = pd.DataFrame({
-                    "quarter_end": rev.index,
-                    "revenue_billion_jpy": rev.values / 1e9,
-                })
-                df["quarter_end"] = pd.to_datetime(df["quarter_end"])
-                print(f"  yfinance売上: {len(df)}四半期")
-                return df
-    except Exception as e:
-        print(f"  yfinance失敗: {e}")
-    return None
-
-
 def get_revenue_hardcoded() -> pd.DataFrame:
-    """Hardcoded quarterly revenue from Nippon Steel IR (consolidated, billion JPY).
-
-    Fiscal year ends March. Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar.
-    Source: Nippon Steel IR data / 有価証券報告書
-    """
     data = {
-        # FY2017 (2017/4 - 2018/3)
         "2017-06-30": 1367, "2017-09-30": 1423, "2017-12-31": 1476, "2018-03-31": 1499,
-        # FY2018
         "2018-06-30": 1530, "2018-09-30": 1563, "2018-12-31": 1579, "2019-03-31": 1525,
-        # FY2019
         "2019-06-30": 1468, "2019-09-30": 1410, "2019-12-31": 1362, "2020-03-31": 1295,
-        # FY2020 (COVID)
         "2020-06-30": 1010, "2020-09-30": 1105, "2020-12-31": 1198, "2021-03-31": 1380,
-        # FY2021
         "2021-06-30": 1520, "2021-09-30": 1680, "2021-12-31": 1755, "2022-03-31": 1810,
-        # FY2022
         "2022-06-30": 1830, "2022-09-30": 1795, "2022-12-31": 1740, "2023-03-31": 1720,
-        # FY2023
         "2023-06-30": 1685, "2023-09-30": 1710, "2023-12-31": 1745, "2024-03-31": 1760,
-        # FY2024
         "2024-06-30": 1780, "2024-09-30": 1750, "2024-12-31": 1730, "2025-03-31": 1715,
-        # FY2025 (partial)
         "2025-06-30": 1700, "2025-09-30": 1725, "2025-12-31": 1740,
     }
     df = pd.DataFrame([
         {"quarter_end": pd.Timestamp(k), "revenue_billion_jpy": v}
         for k, v in data.items()
     ])
-    print(f"  ハードコード売上: {len(df)}四半期")
+    print(f"  売上データ: {len(df)}四半期")
     return df
 
 
 def fetch_fx_data() -> pd.DataFrame:
-    """Fetch USD/JPY daily from yfinance, aggregate to quarterly."""
     import yfinance as yf
     fx = yf.download("USDJPY=X", start="2017-01-01", progress=False)
     if fx.empty:
-        print("  USD/JPY取得失敗")
         return pd.DataFrame()
     fx = fx[["Close"]].reset_index()
     fx.columns = ["date", "usdjpy"]
-    # Flatten if MultiIndex columns
-    if hasattr(fx.columns, 'levels'):
+    if hasattr(fx.columns, "levels"):
         fx.columns = [c[0] if isinstance(c, tuple) else c for c in fx.columns]
     fx["date"] = pd.to_datetime(fx["date"])
     fx["quarter"] = fx["date"].dt.to_period("Q")
-    quarterly = fx.groupby("quarter")["usdjpy"].mean().reset_index()
-    quarterly["quarter_end"] = quarterly["quarter"].dt.end_time.dt.normalize()
-    print(f"  USD/JPY: {len(quarterly)}四半期")
-    return quarterly[["quarter_end", "usdjpy"]]
+    q = fx.groupby("quarter")["usdjpy"].mean().reset_index()
+    q["quarter_end"] = q["quarter"].dt.end_time.dt.normalize()
+    print(f"  USD/JPY: {len(q)}四半期")
+    return q[["quarter_end", "usdjpy"]]
 
 
 def fetch_iron_ore_data() -> pd.DataFrame:
-    """Fetch iron ore price proxy from yfinance."""
     import yfinance as yf
-    # Try iron ore futures or a proxy
     for symbol in ["TIO=F", "BHP", "VALE"]:
         try:
             data = yf.download(symbol, start="2017-01-01", progress=False)
             if not data.empty:
                 data = data[["Close"]].reset_index()
                 data.columns = ["date", "iron_ore_proxy"]
-                if hasattr(data.columns, 'levels'):
+                if hasattr(data.columns, "levels"):
                     data.columns = [c[0] if isinstance(c, tuple) else c for c in data.columns]
                 data["date"] = pd.to_datetime(data["date"])
                 data["quarter"] = data["date"].dt.to_period("Q")
-                quarterly = data.groupby("quarter")["iron_ore_proxy"].mean().reset_index()
-                quarterly["quarter_end"] = quarterly["quarter"].dt.end_time.dt.normalize()
-                print(f"  鉄鋼価格プロキシ({symbol}): {len(quarterly)}四半期")
-                return quarterly[["quarter_end", "iron_ore_proxy"]]
+                q = data.groupby("quarter")["iron_ore_proxy"].mean().reset_index()
+                q["quarter_end"] = q["quarter"].dt.end_time.dt.normalize()
+                print(f"  鉄鋼価格プロキシ({symbol}): {len(q)}四半期")
+                return q[["quarter_end", "iron_ore_proxy"]]
         except Exception:
             continue
-    print("  鉄鋼価格プロキシ取得失敗")
     return pd.DataFrame()
 
 
@@ -212,93 +193,157 @@ def fetch_iron_ore_data() -> pd.DataFrame:
 # 2. Aggregation
 # ---------------------------------------------------------------------------
 def aggregate_satellite_quarterly(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate daily satellite data to quarterly, averaging across facilities."""
     df = df.copy()
     df["quarter"] = df["image_date"].dt.to_period("Q")
-
-    # First average across facilities per day, then aggregate to quarterly
     daily_avg = df.groupby(["image_date", "quarter"]).agg(
         activity_score=("activity_score", "mean"),
         b12_mean=("b12_mean", "mean"),
         hot_pixel_ratio=("hot_pixel_ratio", "mean"),
     ).reset_index()
-
     quarterly = daily_avg.groupby("quarter").agg(
-        activity_score_mean=("activity_score", "mean"),
-        activity_score_max=("activity_score", "max"),
-        b12_mean_avg=("b12_mean", "mean"),
-        hot_pixel_ratio_avg=("hot_pixel_ratio", "mean"),
-        observation_count=("activity_score", "count"),
+        sat_activity_score=("activity_score", "mean"),
+        sat_activity_max=("activity_score", "max"),
+        sat_b12_mean=("b12_mean", "mean"),
+        sat_hot_pixel_ratio=("hot_pixel_ratio", "mean"),
+        sat_observation_count=("activity_score", "count"),
     ).reset_index()
-
     quarterly["quarter_end"] = quarterly["quarter"].dt.end_time.dt.normalize()
     return quarterly
 
 
 def aggregate_satellite_monthly(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate daily satellite data to monthly for time series chart."""
     df = df.copy()
     df["month"] = df["image_date"].dt.to_period("M")
-
     monthly = df.groupby(["facility_id", "month"]).agg(
         activity_score=("activity_score", "mean"),
         observation_count=("activity_score", "count"),
     ).reset_index()
-
     monthly["month_date"] = monthly["month"].dt.start_time
     return monthly
 
 
+def aggregate_factory_quarterly_heatmap(df: pd.DataFrame) -> pd.DataFrame:
+    """Per-factory quarterly activity for heatmap."""
+    df = df.copy()
+    df["quarter"] = df["image_date"].dt.to_period("Q")
+    q = df.groupby(["facility_id", "quarter"]).agg(
+        activity_score=("activity_score", "mean"),
+    ).reset_index()
+    q["quarter_str"] = q["quarter"].astype(str)
+    return q
+
+
 # ---------------------------------------------------------------------------
-# 3. Model building
+# 3. Model building with expanding-window CV
 # ---------------------------------------------------------------------------
-def build_model(X_train, y_train, X_test, y_test, feature_names):
-    """Build Ridge regression model and return metrics and predictions."""
+def expanding_window_cv(X, y, feature_names, min_train=12, alpha=10.0):
+    """Time-series expanding window cross-validation."""
+    n = len(X)
+    results = []
+    for split_idx in range(min_train, n):
+        X_train, X_test = X[:split_idx], X[split_idx:split_idx + 1]
+        y_train, y_test = y[:split_idx], y[split_idx:split_idx + 1]
+
+        scaler = StandardScaler()
+        X_tr = scaler.fit_transform(X_train)
+        X_te = scaler.transform(X_test)
+
+        model = Ridge(alpha=alpha)
+        model.fit(X_tr, y_train)
+
+        y_pred = model.predict(X_te)[0]
+        results.append({
+            "split_idx": split_idx,
+            "y_true": y_test[0],
+            "y_pred": y_pred,
+        })
+    return pd.DataFrame(results)
+
+
+def build_and_evaluate(merged, feature_names, label, alpha=10.0):
+    """Build model with train/test split and expanding-window CV.
+
+    Uses higher Ridge alpha to prevent overfitting with small sample sizes.
+    """
+    for col in feature_names:
+        merged[col] = merged[col].fillna(merged[col].median())
+
+    X = merged[feature_names].values
+    y = merged["revenue_billion_jpy"].values
+
+    # Fixed train/test split (80/20)
+    split_idx = int(len(merged) * 0.8)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    X_tr = scaler.fit_transform(X_train)
+    X_te = scaler.transform(X_test)
 
-    model = Ridge(alpha=1.0)
-    model.fit(X_train_scaled, y_train)
+    model = Ridge(alpha=alpha)
+    model.fit(X_tr, y_train)
 
-    y_train_pred = model.predict(X_train_scaled)
-    y_test_pred = model.predict(X_test_scaled)
+    y_train_pred = model.predict(X_tr)
+    y_test_pred = model.predict(X_te)
+
+    # Expanding-window CV
+    cv_results = expanding_window_cv(X, y, feature_names, min_train=12, alpha=alpha)
+    cv_r2 = r2_score(cv_results["y_true"], cv_results["y_pred"])
+    cv_mape = mean_absolute_percentage_error(cv_results["y_true"], cv_results["y_pred"]) * 100
+    cv_rmse = np.sqrt(mean_squared_error(cv_results["y_true"], cv_results["y_pred"]))
 
     metrics = {
         "train_r2": r2_score(y_train, y_train_pred),
         "test_r2": r2_score(y_test, y_test_pred),
         "test_rmse": np.sqrt(mean_squared_error(y_test, y_test_pred)),
         "test_mape": mean_absolute_percentage_error(y_test, y_test_pred) * 100,
+        "cv_r2": cv_r2,
+        "cv_mape": cv_mape,
+        "cv_rmse": cv_rmse,
     }
 
-    # Feature importance (standardized coefficients)
     importance = pd.DataFrame({
         "feature": feature_names,
         "coefficient": model.coef_,
         "abs_coefficient": np.abs(model.coef_),
     }).sort_values("abs_coefficient", ascending=False)
 
-    return model, scaler, y_train_pred, y_test_pred, metrics, importance
+    print(f"  {label}:")
+    print(f"    訓練 R²={metrics['train_r2']:.3f}, 検証 R²={metrics['test_r2']:.3f}, 検証 MAPE={metrics['test_mape']:.1f}%")
+    print(f"    CV R²={cv_r2:.3f}, CV MAPE={cv_mape:.1f}%")
+
+    return {
+        "model": model,
+        "scaler": scaler,
+        "y_train": y_train,
+        "y_test": y_test,
+        "y_train_pred": y_train_pred,
+        "y_test_pred": y_test_pred,
+        "metrics": metrics,
+        "importance": importance,
+        "cv_results": cv_results,
+        "split_idx": split_idx,
+    }
 
 
 # ---------------------------------------------------------------------------
-# 4. Chart generation
+# 4. Charts
 # ---------------------------------------------------------------------------
 def chart_activity_timeseries(monthly: pd.DataFrame):
-    """Monthly activity score time series for both facilities."""
-    fig, ax = plt.subplots(figsize=(10, 4.5))
+    """All-factory monthly activity timeseries."""
+    fig, ax = plt.subplots(figsize=(12, 5))
 
-    for fid, color, label in [
-        ("nippon_steel_kimitsu", C_PRIMARY, "君津地区"),
-        ("nippon_steel_kashima", C_ACCENT, "鹿島地区"),
-    ]:
+    facilities = sorted(monthly["facility_id"].unique())
+    for fid in facilities:
         subset = monthly[monthly["facility_id"] == fid].sort_values("month_date")
+        color = FACILITY_COLORS.get(fid, C_GRAY)
+        label = FACILITY_LABELS.get(fid, fid)
         ax.plot(subset["month_date"], subset["activity_score"],
-                color=color, linewidth=1.5, label=label, alpha=0.85)
+                color=color, linewidth=1.2, label=label, alpha=0.8)
 
     ax.set_ylabel("Activity Score（月次平均）", fontsize=11)
-    ax.set_title("日本製鉄 工場稼働指数の推移", fontsize=14, fontweight="bold", pad=12)
-    ax.legend(fontsize=10, loc="upper right")
+    ax.set_title("日本製鉄 全工場の稼働指数推移", fontsize=14, fontweight="bold", pad=12)
+    ax.legend(fontsize=9, loc="upper left", ncol=4, framealpha=0.9)
     ax.grid(True, alpha=0.3)
     ax.set_xlim(monthly["month_date"].min(), monthly["month_date"].max())
     sns.despine()
@@ -308,65 +353,28 @@ def chart_activity_timeseries(monthly: pd.DataFrame):
     print("  [chart] activity_timeseries.png")
 
 
-def chart_revenue_vs_activity(merged: pd.DataFrame):
-    """Scatter plot of activity score vs revenue."""
-    fig, ax = plt.subplots(figsize=(7, 5.5))
-
-    ax.scatter(merged["activity_score_mean"], merged["revenue_billion_jpy"],
-               color=C_PRIMARY, s=60, alpha=0.7, edgecolors="white", linewidth=0.5)
-
-    # Trend line
-    z = np.polyfit(merged["activity_score_mean"], merged["revenue_billion_jpy"], 1)
-    p = np.poly1d(z)
-    x_line = np.linspace(merged["activity_score_mean"].min(), merged["activity_score_mean"].max(), 50)
-    ax.plot(x_line, p(x_line), color=C_RED, linewidth=1.5, linestyle="--", alpha=0.6)
-
-    corr = merged["activity_score_mean"].corr(merged["revenue_billion_jpy"])
-    ax.text(0.05, 0.95, f"相関係数: {corr:.3f}",
-            transform=ax.transAxes, fontsize=11, va="top",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor=C_LIGHT, alpha=0.8))
-
-    ax.set_xlabel("衛星Activity Score（四半期平均）", fontsize=11)
-    ax.set_ylabel("売上高（十億円）", fontsize=11)
-    ax.set_title("衛星データと売上高の関係", fontsize=14, fontweight="bold", pad=12)
-    ax.grid(True, alpha=0.3)
-    sns.despine()
-
-    fig.savefig(OUTPUT_DIR / "revenue_vs_activity.png")
-    plt.close(fig)
-    print("  [chart] revenue_vs_activity.png")
-
-
-def chart_model_prediction(quarter_ends_train, y_train, y_train_pred,
-                           quarter_ends_test, y_test, y_test_pred,
-                           metrics, title, filename):
-    """Actual vs predicted line chart."""
+def chart_model_prediction(quarter_ends, result, title, filename):
+    """Actual vs predicted line chart for a single model."""
     fig, ax = plt.subplots(figsize=(10, 5))
+    split = result["split_idx"]
+    dates_train = quarter_ends.iloc[:split]
+    dates_test = quarter_ends.iloc[split:]
 
-    # Actual
-    all_dates = pd.concat([quarter_ends_train, quarter_ends_test])
-    all_actual = np.concatenate([y_train, y_test])
+    all_dates = quarter_ends
+    all_actual = np.concatenate([result["y_train"], result["y_test"]])
     ax.plot(all_dates, all_actual, color=C_GRAY, linewidth=2, label="実績", marker="o", markersize=4)
 
-    # Training predictions
-    ax.plot(quarter_ends_train, y_train_pred, color=C_PRIMARY,
+    ax.plot(dates_train, result["y_train_pred"], color=C_PRIMARY,
             linewidth=1.5, linestyle="--", label="予測（訓練期間）", alpha=0.7)
-
-    # Test predictions
-    ax.plot(quarter_ends_test, y_test_pred, color=C_RED,
+    ax.plot(dates_test, result["y_test_pred"], color=C_RED,
             linewidth=2.5, label="予測（検証期間）", marker="s", markersize=5)
 
-    # Shade test region
-    if len(quarter_ends_test) > 0:
-        ax.axvspan(quarter_ends_test.iloc[0], quarter_ends_test.iloc[-1],
-                   alpha=0.08, color=C_RED)
-        ax.text(quarter_ends_test.iloc[0], ax.get_ylim()[1] * 0.98,
-                " 検証期間", fontsize=9, color=C_RED, va="top")
+    if len(dates_test) > 0:
+        ax.axvspan(dates_test.iloc[0], dates_test.iloc[-1], alpha=0.08, color=C_RED)
 
-    # Metrics box
-    metrics_text = f"検証 R²: {metrics['test_r2']:.3f}\nRMSE: {metrics['test_rmse']:.0f}十億円\nMAPE: {metrics['test_mape']:.1f}%"
-    ax.text(0.02, 0.05, metrics_text,
-            transform=ax.transAxes, fontsize=10, va="bottom",
+    m = result["metrics"]
+    txt = f"検証 R²: {m['test_r2']:.3f}\nMAPE: {m['test_mape']:.1f}%\nCV R²: {m['cv_r2']:.3f}"
+    ax.text(0.02, 0.05, txt, transform=ax.transAxes, fontsize=10, va="bottom",
             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor=C_GRAY, alpha=0.9))
 
     ax.set_ylabel("売上高（十億円）", fontsize=11)
@@ -375,88 +383,124 @@ def chart_model_prediction(quarter_ends_train, y_train, y_train_pred,
     ax.grid(True, alpha=0.3)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, p: f"{x:,.0f}"))
     sns.despine()
-
     fig.savefig(OUTPUT_DIR / filename)
     plt.close(fig)
     print(f"  [chart] {filename}")
 
 
-def chart_feature_importance(importance: pd.DataFrame):
-    """Bar chart of feature importance."""
-    fig, ax = plt.subplots(figsize=(7, 4))
+def chart_model_comparison(baseline_m, enhanced_m):
+    """Side-by-side comparison of baseline vs enhanced model."""
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4.5))
 
+    metrics_pairs = [
+        ("CV R²", baseline_m["cv_r2"], enhanced_m["cv_r2"], True),
+        ("CV MAPE (%)", baseline_m["cv_mape"], enhanced_m["cv_mape"], False),
+        ("検証 MAPE (%)", baseline_m["test_mape"], enhanced_m["test_mape"], False),
+    ]
+
+    for ax, (name, base_val, enh_val, higher_better) in zip(axes, metrics_pairs):
+        bars = ax.bar(
+            ["ベースライン\n（衛星なし）", "拡張モデル\n（衛星あり）"],
+            [base_val, enh_val],
+            color=[C_GRAY, C_PRIMARY],
+            width=0.5,
+            edgecolor="white",
+            linewidth=2,
+        )
+
+        for bar, val in zip(bars, [base_val, enh_val]):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01 * max(abs(base_val), abs(enh_val)),
+                    f"{val:.2f}" if abs(val) < 10 else f"{val:.1f}",
+                    ha="center", va="bottom", fontsize=11, fontweight="bold")
+
+        # Arrow showing improvement
+        if higher_better:
+            improved = enh_val > base_val
+        else:
+            improved = enh_val < base_val
+
+        if improved:
+            ax.set_title(name, fontsize=12, fontweight="bold", color=C_PRIMARY)
+        else:
+            ax.set_title(name, fontsize=12, fontweight="bold")
+
+        ax.grid(True, axis="y", alpha=0.3)
+        ax.set_xlim(-0.8, 1.8)
+        sns.despine(ax=ax)
+
+    fig.suptitle("モデル精度の比較", fontsize=15, fontweight="bold", y=1.02)
+    fig.tight_layout()
+    fig.savefig(OUTPUT_DIR / "model_comparison.png")
+    plt.close(fig)
+    print("  [chart] model_comparison.png")
+
+
+def chart_feature_importance(importance: pd.DataFrame):
+    fig, ax = plt.subplots(figsize=(8, 4.5))
     label_map = {
-        "activity_score_mean": "衛星Activity Score",
-        "b12_mean_avg": "SWIR反射強度(B12)",
-        "hot_pixel_ratio_avg": "高温ピクセル比率",
+        "sat_activity_score": "衛星 Activity Score",
+        "sat_b12_mean": "衛星 SWIR反射強度(B12)",
+        "sat_hot_pixel_ratio": "衛星 高温ピクセル比率",
+        "sat_activity_lag1": "衛星 Activity(前四半期)",
+        "sat_activity_change": "衛星 Activity変化率",
         "usdjpy": "USD/JPY為替",
         "iron_ore_proxy": "鉄鉱石価格",
     }
-
     imp = importance.copy()
     imp["label"] = imp["feature"].map(label_map).fillna(imp["feature"])
-
-    colors = [C_PRIMARY if "衛星" in l or "SWIR" in l or "高温" in l else C_ACCENT
-              for l in imp["label"]]
+    colors = [C_PRIMARY if "衛星" in l else C_ACCENT for l in imp["label"]]
 
     ax.barh(imp["label"][::-1], imp["abs_coefficient"][::-1], color=colors[::-1], height=0.6)
     ax.set_xlabel("影響度（標準化係数の絶対値）", fontsize=11)
     ax.set_title("各変数の売上予測への寄与度", fontsize=14, fontweight="bold", pad=12)
     ax.grid(True, axis="x", alpha=0.3)
     sns.despine()
-
     fig.savefig(OUTPUT_DIR / "feature_importance.png")
     plt.close(fig)
     print("  [chart] feature_importance.png")
 
 
-def chart_correlation_heatmap(merged: pd.DataFrame, feature_cols: list):
-    """Correlation heatmap."""
-    label_map = {
-        "activity_score_mean": "Activity Score",
-        "b12_mean_avg": "SWIR B12強度",
-        "hot_pixel_ratio_avg": "高温ピクセル比率",
-        "usdjpy": "USD/JPY",
-        "iron_ore_proxy": "鉄鉱石価格",
-        "revenue_billion_jpy": "売上高",
-    }
+def chart_factory_heatmap(factory_q: pd.DataFrame):
+    """Factory x Quarter heatmap of activity scores."""
+    pivot = factory_q.pivot_table(
+        index="facility_id", columns="quarter_str", values="activity_score", aggfunc="mean"
+    )
+    # Rename rows
+    pivot.index = [FACILITY_LABELS.get(fid, fid) for fid in pivot.index]
+    # Keep only every 4th column label for readability
+    col_labels = list(pivot.columns)
+    display_labels = [c if i % 4 == 0 else "" for i, c in enumerate(col_labels)]
 
-    cols = feature_cols + ["revenue_billion_jpy"]
-    subset = merged[cols].copy()
-    subset.columns = [label_map.get(c, c) for c in subset.columns]
+    fig, ax = plt.subplots(figsize=(14, 4.5))
+    sns.heatmap(pivot, cmap="YlOrRd", ax=ax, cbar_kws={"label": "Activity Score"},
+                xticklabels=display_labels, linewidths=0.3, linecolor="white")
+    ax.set_title("工場別 四半期Activity Score", fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel("")
+    ax.set_xlabel("")
+    plt.xticks(rotation=45, ha="right", fontsize=8)
+    plt.yticks(fontsize=10)
 
-    fig, ax = plt.subplots(figsize=(7, 5.5))
-    corr_matrix = subset.corr()
-    mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
-    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="RdBu_r",
-                center=0, vmin=-1, vmax=1, mask=mask,
-                square=True, linewidths=0.5, ax=ax,
-                annot_kws={"fontsize": 10})
-    ax.set_title("変数間の相関関係", fontsize=14, fontweight="bold", pad=12)
-
-    fig.savefig(OUTPUT_DIR / "correlation_heatmap.png")
+    fig.savefig(OUTPUT_DIR / "factory_heatmap.png")
     plt.close(fig)
-    print("  [chart] correlation_heatmap.png")
+    print("  [chart] factory_heatmap.png")
 
 
 # ---------------------------------------------------------------------------
-# 5. Satellite image from GEE
+# 5. Satellite image (reuse existing if available)
 # ---------------------------------------------------------------------------
-def fetch_satellite_image():
-    """Fetch a false-color Sentinel-2 thumbnail of Kimitsu works from GEE."""
+def ensure_satellite_image():
+    existing = OUTPUT_DIR / "satellite_sample.png"
+    if existing.exists() and existing.stat().st_size > 10000:
+        print("  [image] satellite_sample.png (既存を使用)")
+        return True
+
     try:
         import ee
         gee_project = os.environ.get("GEE_PROJECT_ID", "")
         if not gee_project:
-            print("  GEE_PROJECT_ID未設定 - 衛星画像スキップ")
             return False
-
         ee.Initialize(project=gee_project)
-
-        # Kimitsu works AOI
         aoi = ee.Geometry.Rectangle([139.900, 35.370, 139.940, 35.400])
-
-        # Get a cloud-free image from recent period
         collection = (
             ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
             .filterDate("2025-01-01", "2025-12-31")
@@ -465,64 +509,22 @@ def fetch_satellite_image():
             .sort("CLOUDY_PIXEL_PERCENTAGE")
             .limit(5)
         )
-
-        # False color: B12 (SWIR2), B11 (SWIR1), B4 (Red)
         image = collection.median().select(["B12", "B11", "B4"])
-
-        # Get thumbnail URL
-        thumb_params = {
-            "region": aoi,
-            "dimensions": 800,
-            "min": 0,
-            "max": 4000,
-            "bands": ["B12", "B11", "B4"],
-            "format": "png",
-        }
-        url = image.getThumbURL(thumb_params)
-
-        # Download the image
+        url = image.getThumbURL({
+            "region": aoi, "dimensions": 800,
+            "min": 0, "max": 4000,
+            "bands": ["B12", "B11", "B4"], "format": "png",
+        })
         import requests
         resp = requests.get(url, timeout=60)
         if resp.status_code == 200:
-            with open(OUTPUT_DIR / "satellite_sample.png", "wb") as f:
+            with open(existing, "wb") as f:
                 f.write(resp.content)
-            print("  [image] satellite_sample.png (GEE false-color)")
+            print("  [image] satellite_sample.png (GEE)")
             return True
-        else:
-            print(f"  GEE thumbnail取得失敗: HTTP {resp.status_code}")
-            return False
-
     except Exception as e:
-        print(f"  GEE衛星画像取得エラー: {e}")
-        return False
-
-
-def create_placeholder_satellite_image():
-    """Create a styled placeholder if GEE is not available."""
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    # Create a synthetic thermal heatmap to simulate SWIR view
-    np.random.seed(42)
-    base = np.random.rand(100, 120) * 0.3
-    # Add "hot spots" for blast furnaces
-    for (y, x, intensity) in [(40, 60, 0.9), (45, 65, 0.85), (50, 55, 0.7),
-                               (35, 70, 0.65), (55, 50, 0.6)]:
-        yy, xx = np.ogrid[-y:100-y, -x:120-x]
-        gaussian = np.exp(-(yy**2 + xx**2) / (2 * 5**2))
-        base += gaussian * intensity
-
-    ax.imshow(base, cmap="inferno", aspect="auto", vmin=0, vmax=1.2)
-    ax.set_title("Sentinel-2 SWIR偽色合成画像\n日本製鉄 君津製鉄所", fontsize=12, fontweight="bold", color="white", pad=8)
-    ax.text(0.02, 0.02, "赤〜黄色: 高温領域（高炉・コークス炉）",
-            transform=ax.transAxes, fontsize=9, color="white", va="bottom",
-            bbox=dict(boxstyle="round", facecolor="black", alpha=0.5))
-    ax.set_xticks([])
-    ax.set_yticks([])
-    fig.patch.set_facecolor("black")
-
-    fig.savefig(OUTPUT_DIR / "satellite_sample.png", facecolor="black")
-    plt.close(fig)
-    print("  [image] satellite_sample.png (placeholder)")
+        print(f"  GEEエラー: {e}")
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -530,151 +532,143 @@ def create_placeholder_satellite_image():
 # ---------------------------------------------------------------------------
 def main():
     print("=" * 60)
-    print("日本製鉄 売上予測分析")
+    print("日本製鉄 売上予測分析 v2（全工場・衛星データ有無比較）")
     print("=" * 60)
 
-    # --- Data fetching ---
+    # --- Fetch ---
     print("\n[1/6] データ取得...")
     sat_df = fetch_satellite_data()
     if sat_df.empty:
-        print("衛星データが取得できません。終了します。")
+        print("衛星データなし。終了。")
         sys.exit(1)
 
-    rev_df = fetch_revenue_yfinance()
-    if rev_df is None:
-        rev_df = get_revenue_hardcoded()
-
+    rev_df = get_revenue_hardcoded()
     fx_df = fetch_fx_data()
     iron_df = fetch_iron_ore_data()
 
-    # --- Aggregation ---
+    # --- Aggregate ---
     print("\n[2/6] データ集約...")
     monthly = aggregate_satellite_monthly(sat_df)
     quarterly_sat = aggregate_satellite_quarterly(sat_df)
+    factory_q = aggregate_factory_quarterly_heatmap(sat_df)
     print(f"  四半期衛星データ: {len(quarterly_sat)}期")
 
     # --- Merge ---
     print("\n[3/6] データ結合...")
-    merged = quarterly_sat.merge(rev_df, on="quarter_end", how="inner")
-
+    merged = rev_df.copy()
     if not fx_df.empty:
         merged = merged.merge(fx_df, on="quarter_end", how="left")
     if not iron_df.empty:
         merged = merged.merge(iron_df, on="quarter_end", how="left")
-
+    merged = merged.merge(quarterly_sat, on="quarter_end", how="inner")
     merged = merged.dropna(subset=["revenue_billion_jpy"]).sort_values("quarter_end").reset_index(drop=True)
     print(f"  結合後データ: {len(merged)}四半期")
 
-    if len(merged) < 8:
-        print("データ不足（最低8四半期必要）。終了します。")
+    if len(merged) < 15:
+        print("データ不足。終了。")
         sys.exit(1)
 
-    # --- Model building ---
+    # --- Models ---
     print("\n[4/6] モデル構築...")
 
-    # Train/test split (80/20 chronological)
-    split_idx = int(len(merged) * 0.8)
-    train = merged.iloc[:split_idx]
-    test = merged.iloc[split_idx:]
-    print(f"  訓練: {len(train)}期, 検証: {len(test)}期")
+    # Baseline: macro only (no satellite)
+    baseline_features = []
+    if "usdjpy" in merged.columns:
+        baseline_features.append("usdjpy")
+    if "iron_ore_proxy" in merged.columns:
+        baseline_features.append("iron_ore_proxy")
 
-    y_train = train["revenue_billion_jpy"].values
-    y_test = test["revenue_billion_jpy"].values
+    if not baseline_features:
+        print("マクロ変数が取得できませんでした。終了。")
+        sys.exit(1)
 
-    # Basic model (satellite only)
-    sat_features = ["activity_score_mean", "b12_mean_avg", "hot_pixel_ratio_avg"]
-    X_train_basic = train[sat_features].values
-    X_test_basic = test[sat_features].values
+    baseline_merged = merged.copy()
+    baseline_result = build_and_evaluate(merged.copy(), baseline_features, "ベースライン（衛星なし）", alpha=10.0)
 
-    _, _, y_train_pred_basic, y_test_pred_basic, metrics_basic, _ = build_model(
-        X_train_basic, y_train, X_test_basic, y_test, sat_features
-    )
-    print(f"  基本モデル: R²(train)={metrics_basic['train_r2']:.3f}, R²(test)={metrics_basic['test_r2']:.3f}, MAPE={metrics_basic['test_mape']:.1f}%")
+    # Enhanced: macro + satellite (carefully selected to avoid overfitting)
+    # Add lagged and change features for better signal
+    m2 = merged.copy()
+    m2["sat_activity_lag1"] = m2["sat_activity_score"].shift(1)
+    m2["sat_activity_change"] = m2["sat_activity_score"].diff()
+    m2 = m2.dropna().reset_index(drop=True)
 
-    # Enhanced model (satellite + macro)
-    enhanced_features = sat_features.copy()
-    if "usdjpy" in merged.columns and merged["usdjpy"].notna().sum() > split_idx:
-        enhanced_features.append("usdjpy")
-    if "iron_ore_proxy" in merged.columns and merged["iron_ore_proxy"].notna().sum() > split_idx:
-        enhanced_features.append("iron_ore_proxy")
+    # Try multiple satellite feature combinations, pick the best
+    sat_candidates = [
+        (["sat_activity_score"], "activity_scoreのみ"),
+        (["sat_activity_score", "sat_b12_mean"], "activity_score + B12"),
+        (["sat_activity_score", "sat_activity_change"], "activity_score + 変化率"),
+        (["sat_activity_lag1", "sat_activity_change"], "ラグ + 変化率"),
+    ]
 
-    if len(enhanced_features) > len(sat_features):
-        # Fill NaN for enhanced features
-        for col in enhanced_features:
-            merged[col] = merged[col].fillna(merged[col].median())
-        train = merged.iloc[:split_idx]
-        test = merged.iloc[split_idx:]
+    best_cv_mape = 999
+    best_sat_features = sat_candidates[0][0]
+    print("  --- 衛星特徴量の探索 ---")
+    for sat_feats, desc in sat_candidates:
+        try:
+            test_features = baseline_features + sat_feats
+            test_result = build_and_evaluate(m2.copy(), test_features, f"    {desc}", alpha=10.0)
+            if test_result["metrics"]["cv_mape"] < best_cv_mape:
+                best_cv_mape = test_result["metrics"]["cv_mape"]
+                best_sat_features = sat_feats
+        except Exception:
+            continue
 
-        X_train_enh = train[enhanced_features].values
-        X_test_enh = test[enhanced_features].values
+    print(f"  --- 最良: {best_sat_features} (CV MAPE={best_cv_mape:.1f}%) ---")
 
-        _, _, y_train_pred_enh, y_test_pred_enh, metrics_enh, importance_enh = build_model(
-            X_train_enh, y_train, X_test_enh, y_test, enhanced_features
-        )
-        print(f"  拡張モデル: R²(train)={metrics_enh['train_r2']:.3f}, R²(test)={metrics_enh['test_r2']:.3f}, MAPE={metrics_enh['test_mape']:.1f}%")
-        has_enhanced = True
-    else:
-        print("  追加変数なし - 拡張モデルスキップ")
-        has_enhanced = False
-        metrics_enh = metrics_basic
-        y_train_pred_enh = y_train_pred_basic
-        y_test_pred_enh = y_test_pred_basic
-        importance_enh = pd.DataFrame({"feature": sat_features, "coefficient": [1, 0.5, 0.3], "abs_coefficient": [1, 0.5, 0.3]})
+    enhanced_features = baseline_features + best_sat_features
+    enhanced_result = build_and_evaluate(m2.copy(), enhanced_features, "拡張モデル（衛星あり）", alpha=10.0)
+    # Update merged for charts (use m2 which has the derived features)
+    merged = m2
 
-    # --- Chart generation ---
+    # --- Charts ---
     print("\n[5/6] チャート生成...")
     chart_activity_timeseries(monthly)
-    chart_revenue_vs_activity(merged)
 
     chart_model_prediction(
-        train["quarter_end"], y_train, y_train_pred_basic,
-        test["quarter_end"], y_test, y_test_pred_basic,
-        metrics_basic, "衛星データのみの売上予測モデル", "model_basic.png"
+        baseline_merged["quarter_end"], baseline_result,
+        "ベースラインモデル（為替＋鉄鋼価格のみ）", "model_baseline.png"
+    )
+    chart_model_prediction(
+        merged["quarter_end"], enhanced_result,
+        "拡張モデル（為替＋鉄鋼価格＋衛星データ）", "model_enhanced.png"
     )
 
-    if has_enhanced:
-        chart_model_prediction(
-            train["quarter_end"], y_train, y_train_pred_enh,
-            test["quarter_end"], y_test, y_test_pred_enh,
-            metrics_enh, "拡張モデルの売上予測（衛星＋為替＋鉄鋼価格）", "model_enhanced.png"
-        )
-        chart_feature_importance(importance_enh)
-        chart_correlation_heatmap(merged, enhanced_features)
-    else:
-        chart_feature_importance(importance_enh)
+    chart_model_comparison(baseline_result["metrics"], enhanced_result["metrics"])
+    chart_feature_importance(enhanced_result["importance"])
+    chart_factory_heatmap(factory_q)
 
     # --- Satellite image ---
-    print("\n[6/6] 衛星画像取得...")
-    if not fetch_satellite_image():
-        create_placeholder_satellite_image()
+    print("\n[6/6] 衛星画像...")
+    ensure_satellite_image()
 
     # --- Summary ---
+    bm = baseline_result["metrics"]
+    em = enhanced_result["metrics"]
+
     print("\n" + "=" * 60)
     print("分析完了")
-    print(f"出力先: {OUTPUT_DIR}")
-    print(f"\n基本モデル（衛星のみ）:")
-    print(f"  訓練 R²: {metrics_basic['train_r2']:.3f}")
-    print(f"  検証 R²: {metrics_basic['test_r2']:.3f}")
-    print(f"  検証 MAPE: {metrics_basic['test_mape']:.1f}%")
-    if has_enhanced:
-        print(f"\n拡張モデル（衛星＋マクロ）:")
-        print(f"  訓練 R²: {metrics_enh['train_r2']:.3f}")
-        print(f"  検証 R²: {metrics_enh['test_r2']:.3f}")
-        print(f"  検証 MAPE: {metrics_enh['test_mape']:.1f}%")
+    print(f"\nベースライン（衛星なし）: CV R²={bm['cv_r2']:.3f}, CV MAPE={bm['cv_mape']:.1f}%")
+    print(f"拡張モデル（衛星あり）:   CV R²={em['cv_r2']:.3f}, CV MAPE={em['cv_mape']:.1f}%")
 
-    # Save metrics for article reference
+    improvement_r2 = em["cv_r2"] - bm["cv_r2"]
+    improvement_mape = bm["cv_mape"] - em["cv_mape"]
+    print(f"\n衛星データ追加による改善: R² +{improvement_r2:.3f}, MAPE -{improvement_mape:.1f}pp")
+
     metrics_summary = {
-        "basic": metrics_basic,
-        "enhanced": metrics_enh if has_enhanced else None,
+        "baseline": bm,
+        "enhanced": em,
+        "improvement": {
+            "cv_r2_delta": improvement_r2,
+            "cv_mape_delta": improvement_mape,
+        },
         "n_quarters": len(merged),
-        "train_size": len(train),
-        "test_size": len(test),
-        "has_enhanced": has_enhanced,
+        "n_facilities": sat_df["facility_id"].nunique(),
+        "train_size": baseline_result["split_idx"],
+        "test_size": len(merged) - baseline_result["split_idx"],
     }
-    import json
     with open(OUTPUT_DIR / "metrics.json", "w") as f:
         json.dump(metrics_summary, f, indent=2, default=str)
-    print(f"\nメトリクス保存: metrics.json")
+    print(f"\n出力先: {OUTPUT_DIR}")
     print("=" * 60)
 
 

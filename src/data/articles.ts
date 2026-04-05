@@ -12,9 +12,9 @@ export const ARTICLES: Article[] = [
   {
     id: 'nippon-steel-revenue',
     title: '日本製鉄の売上は衛星画像から予測できるのか？',
-    summary: 'Sentinel-2衛星の短波赤外データから製鉄所の稼働状況を読み取り、日本製鉄の四半期売上を予測するモデルを構築。衛星データ単体の限界と、為替・鉄鋼価格を加えた拡張モデルの精度を検証します。',
+    summary: '日本製鉄の国内全8製鉄所をSentinel-2衛星で監視し、工場の熱データを売上予測モデルに組み込むと精度が向上するか検証。為替・鉄鋼価格のみのベースラインと、衛星データを追加した拡張モデルを比較します。',
     category: 'Commodities',
-    date: '2026-04-04',
+    date: '2026-04-05',
     imageUrl: '/articles/nippon-steel-revenue/satellite_sample.png',
     readTime: '15 min',
   },
