@@ -17,6 +17,12 @@
       "script": "collectors/steel_plant_collector.py",
       "schedule": "30 7 * * *",
       "enabled": true
+    },
+    {
+      "id": "reddit-crypto",
+      "script": "collectors/reddit_crypto_collector.py",
+      "schedule": "0 */4 * * *",
+      "enabled": true
     }
   ]
 }
