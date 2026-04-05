@@ -1,3 +1,22 @@
 {
-  "collectors": []
+  "collectors": [
+    {
+      "id": "gov-procurement",
+      "script": "collectors/gov_procurement_collector.py",
+      "schedule": "0 6 1 * *",
+      "enabled": true
+    },
+    {
+      "id": "patents",
+      "script": "collectors/patent_collector.py",
+      "schedule": "0 3 * * 0",
+      "enabled": true
+    },
+    {
+      "id": "steel-plant-activity",
+      "script": "collectors/steel_plant_collector.py",
+      "schedule": "30 7 * * *",
+      "enabled": true
+    }
+  ]
 }

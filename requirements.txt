@@ -7,3 +7,8 @@ supabase
 boto3
 openpyxl
 python-dotenv
+earthengine-api
+python-dateutil
+scikit-learn
+matplotlib
+seaborn

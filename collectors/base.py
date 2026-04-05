@@ -71,7 +71,7 @@ class BaseCollector:
             {
                 "status": "success",
                 "rows_collected": rows_collected,
-                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", self.run_id).execute()
         self.logger.info("Run %s succeeded – %d rows collected", self.run_id, rows_collected)
@@ -84,7 +84,7 @@ class BaseCollector:
             {
                 "status": "error",
                 "error_message": error_message[:2000],
-                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", self.run_id).execute()
         self.logger.error("Run %s failed: %s", self.run_id, error_message)

@@ -58,9 +58,10 @@ export default function ArticlesPage() {
         {/* Article list */}
         <div className="space-y-4">
           {filtered.map(article => (
-            <div
+            <Link
               key={article.id}
-              className="bg-white rounded-xl border border-gray-100 shadow-card overflow-hidden flex flex-col sm:flex-row group hover:shadow-card-hover transition-shadow cursor-pointer"
+              to={`/articles/${article.id}`}
+              className="bg-white rounded-xl border border-gray-100 shadow-card overflow-hidden flex flex-col sm:flex-row group hover:shadow-card-hover transition-shadow cursor-pointer no-underline"
             >
               {/* Image */}
               <div className="sm:w-[240px] h-[160px] sm:h-auto flex-shrink-0 overflow-hidden">
@@ -98,7 +99,7 @@ export default function ArticlesPage() {
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 

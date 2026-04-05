@@ -63,7 +63,7 @@ def main() -> None:
         schedule = col["schedule"]
         script = col["script"]
         entry = (
-            f"{schedule} cd ~/app && python3 collectors/{script} "
+            f"{schedule} cd ~/app && python3 {script} "
             f">> ~/app/logs/{cid}.log 2>&1 {ALTDATA_TAG_PREFIX}{cid}"
         )
         kept_lines.append(entry)

@@ -75,7 +75,7 @@ export default function ArticleCarousel() {
           </div>
 
           {/* Center card */}
-          <div className="flex-1 min-w-0">
+          <Link to={`/articles/${centerArticle.id}`} className="flex-1 min-w-0 no-underline">
             <div className="bg-white rounded-xl border border-gray-100 shadow-card overflow-hidden flex flex-col sm:flex-row group cursor-pointer hover:shadow-card-hover transition-shadow">
               {/* Image */}
               <div className="sm:w-[280px] h-[160px] sm:h-auto flex-shrink-0 overflow-hidden">
@@ -113,7 +113,7 @@ export default function ArticleCarousel() {
                 </div>
               </div>
             </div>
-          </div>
+          </Link>
 
           {/* Right peek */}
           <div

@@ -10,6 +10,15 @@ export interface Article {
 
 export const ARTICLES: Article[] = [
   {
+    id: 'nippon-steel-revenue',
+    title: '日本製鉄の売上は衛星画像から予測できるのか？',
+    summary: 'Sentinel-2衛星の短波赤外データから製鉄所の稼働状況を読み取り、日本製鉄の四半期売上を予測するモデルを構築。衛星データ単体の限界と、為替・鉄鋼価格を加えた拡張モデルの精度を検証します。',
+    category: 'Commodities',
+    date: '2026-04-04',
+    imageUrl: '/articles/nippon-steel-revenue/satellite_sample.png',
+    readTime: '15 min',
+  },
+  {
     id: '1',
     title: '原油市場の構造変化：OPECプラスの減産戦略とシェールオイルの供給動向分析',
     summary: '2024年以降の原油市場における需給バランスの変化を、衛星データとタンカー追跡データから分析。OPECプラスの政策変更がスポット価格に与える影響を定量的に検証します。',
