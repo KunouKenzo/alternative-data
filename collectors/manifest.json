@@ -23,6 +23,18 @@
       "script": "collectors/reddit_crypto_collector.py",
       "schedule": "0 */4 * * *",
       "enabled": true
+    },
+    {
+      "id": "tdl-queue-times",
+      "script": "collectors/tdl_wait_collector.py",
+      "schedule": "0 */2 * * *",
+      "enabled": true
+    },
+    {
+      "id": "tdl-weather-maihama",
+      "script": "collectors/tdl_weather_collector.py",
+      "schedule": "30 15 * * *",
+      "enabled": true
     }
   ]
 }
