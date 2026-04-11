@@ -30,7 +30,7 @@ export default function LoginPage() {
         {/* Logo / Title */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-2xl font-bold text-gradient">Alternative Data</h1>
+            <h1 className="text-2xl font-bold text-gradient">Data-Walkers</h1>
           </Link>
           <p className="text-gray-500 text-sm mt-2">アカウントにログイン</p>
         </div>

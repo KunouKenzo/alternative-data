@@ -94,7 +94,7 @@ export default function CatalogPage() {
           <header className="flex items-center justify-between mb-10">
             <div>
               <h1 className="text-4xl font-bold text-gradient tracking-tight">
-                Alternative Data
+                Data-Walkers
               </h1>
               <p className="text-gray-500 mt-1 text-sm">
                 Curated datasets for quantitative research
