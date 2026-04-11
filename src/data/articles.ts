@@ -10,6 +10,15 @@ export interface Article {
 
 export const ARTICLES: Article[] = [
   {
+    id: 'sector-rotation',
+    title: 'S&P500セクターローテーション分析：マネーフローの可視化',
+    summary: 'セクターETFの価格出来高から推定した方向性マネープレッシャー、CFTC COTポジショニング、マクロリスク選好度、オプションP/C比率——4つの無料データソースを統合し、11セクターのRotation Composite Scoreを算出。2026年4月時点でエネルギー・素材・公益事業が上位、ヘルスケアが最下位となった。',
+    category: 'Market',
+    date: '2026-04-11',
+    imageUrl: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&h=450&fit=crop',
+    readTime: '14 min',
+  },
+  {
     id: 'nippon-steel-revenue',
     title: '日本製鉄の売上は衛星画像から予測できるのか？',
     summary: '日本製鉄の国内全8製鉄所をSentinel-2衛星で監視し、工場の熱データを売上予測モデルに組み込むと精度が向上するか検証。為替・鉄鋼価格のみのベースラインと、衛星データを追加した拡張モデルを比較します。',
@@ -53,15 +62,6 @@ export const ARTICLES: Article[] = [
     date: '2026-03-10',
     imageUrl: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=800&h=450&fit=crop',
     readTime: '15 min',
-  },
-  {
-    id: '5',
-    title: 'S&P500セクターローテーション分析：マネーフローの可視化',
-    summary: 'ETFのフローデータとオプション市場のポジショニングから、機関投資家のセクター間資金移動を追跡。次のローテーション先を予測するフレームワークを構築します。',
-    category: 'Market',
-    date: '2026-03-05',
-    imageUrl: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&h=450&fit=crop',
-    readTime: '11 min',
   },
 ]
 

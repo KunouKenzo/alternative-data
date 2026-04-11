@@ -35,6 +35,12 @@
       "script": "collectors/tdl_weather_collector.py",
       "schedule": "30 15 * * *",
       "enabled": true
+    },
+    {
+      "id": "sector-rotation",
+      "script": "collectors/sector_rotation_collector.py",
+      "schedule": "0 13 * * 2-6",
+      "enabled": true
     }
   ]
 }

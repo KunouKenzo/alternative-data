@@ -6,4 +6,5 @@ import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
  */
 export const ARTICLE_CONTENT: Record<string, LazyExoticComponent<ComponentType>> = {
   'nippon-steel-revenue': lazy(() => import('../components/articles/content/NipponSteelRevenue')),
+  'sector-rotation': lazy(() => import('../components/articles/content/SectorRotation')),
 }

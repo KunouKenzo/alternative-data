@@ -4,3 +4,7 @@ dist
 __pycache__
 *.pyc
 logs/
+.venv/
+FinFutYY.txt
+analysis/sector_rotation/analysis.json
+steel_pipeline.log

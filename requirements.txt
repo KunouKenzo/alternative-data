@@ -12,3 +12,4 @@ python-dateutil
 scikit-learn
 matplotlib
 seaborn
+cot_reports
